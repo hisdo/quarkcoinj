@@ -21,7 +21,6 @@ import com.google.bitcoin.script.ScriptBuilder;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.hashengineering.crypto.Hash9;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +37,8 @@ import java.util.List;
 
 import static com.google.bitcoin.core.Utils.doubleDigest;
 import static com.google.bitcoin.core.Utils.doubleDigestTwoBuffers;
+import static com.google.bitcoin.core.Utils.scryptDigest;
+import static com.hashengineering.crypto.Hash9.quarkDigest;
 
 /**
  * <p>A block is a group of transactions, and is one of the fundamental data structures of the Bitcoin system.
@@ -192,7 +193,8 @@ public class Block extends Message {
         difficultyTarget = readUint32();
         nonce = readUint32();
 
-        hash = new Sha256Hash(Utils.reverseBytes(Hash9.digest(bytes, offset, cursor)));
+        hash = new Sha256Hash(Utils.reverseBytes(/*Utils.doubleDigest*/quarkDigest(bytes, offset, cursor)));
+        //Utils.doubleDigest(a, b, c);
 
         headerParsed = true;
         headerBytesValid = parseRetain;
@@ -506,7 +508,7 @@ public class Block extends Message {
         try {
             ByteArrayOutputStream bos = new UnsafeByteArrayOutputStream(HEADER_SIZE);
             writeHeader(bos);
-            return new Sha256Hash(Utils.reverseBytes(Hash9.digest(bos.toByteArray())));
+            return new Sha256Hash(Utils.reverseBytes(quarkDigest(bos.toByteArray())));
         } catch (IOException e) {
             throw new RuntimeException(e); // Cannot happen.
         }
@@ -525,7 +527,7 @@ public class Block extends Message {
         try {
             ByteArrayOutputStream bos = new UnsafeByteArrayOutputStream(HEADER_SIZE);
             writeHeader(bos);
-            return new Sha256Hash(Utils.reverseBytes(CoinDefinition.digest(bos.toByteArray())));
+            return new Sha256Hash(Utils.reverseBytes(CoinDefinition.quarkDigest(bos.toByteArray())));
         } catch (IOException e) {
             throw new RuntimeException(e); // Cannot happen.
         }
@@ -669,7 +671,7 @@ public class Block extends Message {
     public BigInteger getDifficultyTargetAsInteger() throws VerificationException {
         maybeParseHeader();
         BigInteger target = Utils.decodeCompactBits(difficultyTarget);
-        if (target.signum() <= 0 || target.compareTo(params.proofOfWorkLimit) > 0)
+        if (target.compareTo(BigInteger.ZERO) <= 0 || target.compareTo(params.proofOfWorkLimit) > 0)
             throw new VerificationException("Difficulty target is bad: " + target.toString());
         return target;
     }
@@ -685,6 +687,7 @@ public class Block extends Message {
         // To prevent this attack from being possible, elsewhere we check that the difficultyTarget
         // field is of the right value. This requires us to have the preceeding blocks.
         BigInteger target = getDifficultyTargetAsInteger();
+
         BigInteger h = getHash().toBigInteger();
         if (h.compareTo(target) > 0) {
             // Proof of work check failed!
@@ -700,7 +703,7 @@ public class Block extends Message {
     private void checkTimestamp() throws VerificationException {
         maybeParseHeader();
         // Allow injection of a fake clock to allow unit testing.
-        long currentTime = Utils.currentTimeSeconds();
+        long currentTime = Utils.currentTimeMillis()/1000;
         if (time > currentTime + ALLOWED_TIME_DRIFT)
             throw new VerificationException("Block too far in future");
     }
@@ -1077,12 +1080,12 @@ public class Block extends Message {
 
     @VisibleForTesting
     public Block createNextBlock(@Nullable Address to, TransactionOutPoint prevOut) {
-        return createNextBlock(to, prevOut, Utils.currentTimeSeconds(), EMPTY_BYTES, Utils.toNanoCoins(50, 0));
+        return createNextBlock(to, prevOut, Utils.currentTimeMillis() / 1000, EMPTY_BYTES, Utils.toNanoCoins(50, 0));
     }
 
     @VisibleForTesting
     public Block createNextBlock(@Nullable Address to, BigInteger value) {
-        return createNextBlock(to, null, Utils.currentTimeSeconds(), EMPTY_BYTES, value);
+        return createNextBlock(to, null, Utils.currentTimeMillis() / 1000, EMPTY_BYTES, value);
     }
 
     @VisibleForTesting
@@ -1092,7 +1095,7 @@ public class Block extends Message {
 
     @VisibleForTesting
     public Block createNextBlockWithCoinbase(byte[] pubKey, BigInteger coinbaseValue) {
-        return createNextBlock(null, null, Utils.currentTimeSeconds(), pubKey, coinbaseValue);
+        return createNextBlock(null, null, Utils.currentTimeMillis() / 1000, pubKey, coinbaseValue);
     }
 
     /**
@@ -1101,7 +1104,7 @@ public class Block extends Message {
      */
     @VisibleForTesting
     Block createNextBlockWithCoinbase(byte[] pubKey) {
-        return createNextBlock(null, null, Utils.currentTimeSeconds(), pubKey, Utils.toNanoCoins(50, 0));
+        return createNextBlock(null, null, Utils.currentTimeMillis() / 1000, pubKey, Utils.toNanoCoins(50, 0));
     }
 
     @VisibleForTesting

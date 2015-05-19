@@ -1,6 +1,5 @@
 /**
  * Copyright 2011 Google Inc.
- * Copyright 2014 Andreas Schildbach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +17,6 @@
 package com.google.bitcoin.core;
 
 import com.google.common.base.Charsets;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Ordering;
-import com.google.common.primitives.Ints;
 import com.google.common.primitives.UnsignedLongs;
 import org.spongycastle.crypto.digests.RIPEMD160Digest;
 import org.spongycastle.util.encoders.Hex;
@@ -33,7 +29,8 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Date;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -57,15 +54,13 @@ public class Utils {
     }
 
     /** The string that prefixes all text messages signed using Bitcoin keys. */
-
-    public static final String BITCOIN_SIGNED_MESSAGE_HEADER = "Quarkcoin Signed Message:\n";
-
+    public static final String BITCOIN_SIGNED_MESSAGE_HEADER = "Dimecoin Signed Message:\n";
     public static final byte[] BITCOIN_SIGNED_MESSAGE_HEADER_BYTES = BITCOIN_SIGNED_MESSAGE_HEADER.getBytes(Charsets.UTF_8);
 
     // TODO: Replace this nanocoins business with something better.
 
     /**
-     * How many "nanocoins" there are in a Quark.
+     * How many "nanocoins" there are in a Dimecoin.
      * <p/>
      * A nanocoin is the smallest unit that can be transferred using Bitcoin.
      * The term nanocoin is very misleading, though, because there are only 100 million
@@ -134,10 +129,10 @@ public class Utils {
     }
     public static BigInteger toNanoCoins_BTC(String coins) {
         BigInteger bigint = new BigDecimal(coins).movePointRight(8).toBigIntegerExact();
-        if (bigint.signum() < 0)
+        if (bigint.compareTo(BigInteger.ZERO) < 0)
             throw new ArithmeticException("Negative coins specified");
         if (bigint.compareTo(NetworkParameters.MAX_MONEY) > 0)
-            throw new ArithmeticException("Amount larger than the total quantity of "+CoinDefinition.coinName+"s possible specified.");
+            throw new ArithmeticException("Amount larger than the total quantity of Bitcoins possible specified.");
         return bigint;
     }
 
@@ -353,7 +348,7 @@ public class Utils {
      */
     public static String bitcoinValueToFriendlyString(BigInteger value) {
         // TODO: This API is crap. This method should go away when we encapsulate money values.
-        boolean negative = value.signum() < 0;
+        boolean negative = value.compareTo(BigInteger.ZERO) < 0;
         if (negative)
             value = value.negate();
         BigDecimal bd = new BigDecimal(value, 5);
@@ -426,7 +421,7 @@ public class Utils {
             else
                 return new byte[] {0x00, 0x00, 0x00, 0x00};
         }
-        boolean isNegative = value.signum() < 0;
+        boolean isNegative = value.compareTo(BigInteger.ZERO) < 0;
         if (isNegative)
             value = value.negate();
         byte[] array = value.toByteArray();
@@ -482,20 +477,13 @@ public class Utils {
      */
     public static Date rollMockClockMillis(long millis) {
         if (mockTime == null)
-            throw new IllegalStateException("You need to use setMockClock() first.");
+            mockTime = new Date();
         mockTime = new Date(mockTime.getTime() + millis);
         return mockTime;
     }
 
     /**
-     * Sets the mock clock to the current time.
-     */
-    public static void setMockClock() {
-        mockTime = new Date();
-    }
-
-    /**
-     * Sets the mock clock to the given time (in seconds).
+     * Sets the mock clock to the given time (in seconds)
      */
     public static void setMockClock(long mockClock) {
         mockTime = new Date(mockClock * 1000);
@@ -511,19 +499,14 @@ public class Utils {
             return new Date();
     }
 
-    // TODO: Replace usages of this where the result is / 1000 with currentTimeSeconds.
-    /** Returns the current time in milliseconds since the epoch, or a mocked out equivalent. */
+    /** Returns the current time in seconds since the epoch, or a mocked out equivalent. */
     public static long currentTimeMillis() {
         if (mockTime != null)
             return mockTime.getTime();
         else
             return System.currentTimeMillis();
     }
-
-    public static long currentTimeSeconds() {
-        return currentTimeMillis() / 1000;
-    }
-
+    
     public static byte[] copyOf(byte[] in, int length) {
         byte[] out = new byte[length];
         System.arraycopy(in, 0, out, 0, Math.min(length, in.length));
@@ -629,44 +612,5 @@ public class Utils {
         if (mockSleepQueue != null) {
             mockSleepQueue.offer(true);
         }
-    }
-
-    private static class Pair implements Comparable<Pair> {
-        int item, count;
-        public Pair(int item, int count) { this.count = count; this.item = item; }
-        @Override public int compareTo(Pair o) { return -Ints.compare(count, o.count); }
-    }
-
-    public static int maxOfMostFreq(int... items) {
-        // Java 6 sucks.
-        ArrayList<Integer> list = new ArrayList<Integer>(items.length);
-        for (int item : items) list.add(item);
-        return maxOfMostFreq(list);
-    }
-
-    public static int maxOfMostFreq(List<Integer> items) {
-        if (items.isEmpty())
-            return 0;
-        // This would be much easier in a functional language (or in Java 8).
-        items = Ordering.natural().reverse().sortedCopy(items);
-        LinkedList<Pair> pairs = Lists.newLinkedList();
-        pairs.add(new Pair(items.get(0), 0));
-        for (int item : items) {
-            Pair pair = pairs.getLast();
-            if (pair.item != item)
-                pairs.add((pair = new Pair(item, 0)));
-            pair.count++;
-        }
-        // pairs now contains a uniqified list of the sorted inputs, with counts for how often that item appeared.
-        // Now sort by how frequently they occur, and pick the max of the most frequent.
-        Collections.sort(pairs);
-        int maxCount = pairs.getFirst().count;
-        int maxItem = pairs.getFirst().item;
-        for (Pair pair : pairs) {
-            if (pair.count != maxCount)
-                break;
-            maxItem = Math.max(maxItem, pair.item);
-        }
-        return maxItem;
     }
 }

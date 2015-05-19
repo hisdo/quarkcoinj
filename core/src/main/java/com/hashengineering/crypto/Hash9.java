@@ -1,199 +1,156 @@
-/*
- * Copyright 2014 Hash Engineering Solutions.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.hashengineering.crypto;
 
+import com.google.bitcoin.core.Sha256Hash;
+import com.google.bitcoin.core.Sha512Hash;
 import fr.cryptohash.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import static com.hashengineering.utils.ByteArrayUtils.trim256;
 
 /**
- * Created by Hash Engineering Solutions 2/18/14.
- *
- * This class implements the Quark Proof Of Work hashing function,
- * which is also used as the block hash
- *
+ * Created by Hash Engineering on 2/18/14.
  */
+public class Hash9 {
 
-public class Hash9 extends HashFunction {
     private static final Logger log = LoggerFactory.getLogger(Hash9.class);
-
-    static BLAKE512 blake512;
-    static BMW512 bmw512;
-    static Groestl512 groestl512;
-    static Skein512 skein512;
-    static JH512 jh512;
-    static Keccak512 keccak512;
+    private static boolean native_library_loaded = false;
 
     static {
-        loadNativeLibrary("hash9");
 
-        //if(native_library_loaded == false)
+        try {
+            //System.loadLibrary("hash9");
+            //native_library_loaded = true;
+        }
+        catch(UnsatisfiedLinkError e)
         {
-            blake512 = new BLAKE512();
-            bmw512 = new BMW512();
-            groestl512 = new Groestl512();
-            skein512 = new Skein512();
-            jh512 = new JH512();
-            keccak512 = new Keccak512();
+            native_library_loaded = false;
+        }
+        catch(Exception e)
+        {
+            native_library_loaded = false;
         }
     }
 
-    public static byte[] digest(byte[] input, int offset, int length)
+    public static byte[] quarkDigest(byte[] input, int offset, int length)
     {
-        try {
-            /*byte [] result = null;
-            long start = System.currentTimeMillis();
-            result = hash9(input, 0, input.length);
-            timeJ2 += System.currentTimeMillis() - start;
-
-            start = System.currentTimeMillis();
-            result = hash9_native(input, 0, input.length);
-            timeN2 += System.currentTimeMillis() - start;
-            if(count2 == 100)
-            {
-                log.info("[stats] Quark Java New: "+ timeJ2);
-
-                log.info("[stats] Quark Native: "+ timeN2);
-                count2 = 0;
-                timeJ2 = timeN2 = 0;
-            }
-            count2++;
-            return result;*/
-            return native_library_loaded ? hash9_native(input, offset, length) : hash9(input, offset, length);
+        byte [] buf = new byte[length];
+        for(int i = 0; i < length; ++i)
+        {
+            buf[i] = input[offset + i];
         }
-        catch(Exception e) {
-            return null;
-        }
+        return quarkDigest(buf);
     }
 
-    static long timeJ = 0;
-    static long timeN = 0;
-    static long timeNO = 0;
-    static int count = 0;
-    static long timeJ2 = 0;
-    static long timeN2 = 0;
-    static int count2 = 0;
-
-    public static byte[] digest(byte[] input) {
-
+    public static byte[] quarkDigest(byte[] input) {
+        //long start = System.currentTimeMillis();
         try {
-            /*
-            byte [] result = null;
-            long start = System.currentTimeMillis();
-            result = hash9(input, 0, input.length);
-            timeJ += System.currentTimeMillis() - start;
-            start = System.currentTimeMillis();
-            result = hash9_native_old(input);
-            timeNO += System.currentTimeMillis() - start;
-            start = System.currentTimeMillis();
-            result = hash9_native(input, 0, input.length);
-            timeN += System.currentTimeMillis() - start;
-            if(count == 100)
-            {
-                log.info("[stats] Quark Java New: "+ timeJ);
-                log.info("[stats] Quark Native: "+ timeN);
-                log.info("[stats] Quark Native Old: "+ timeNO);
-                count = 0;
-                timeJ = timeN = timeNO = 0;
-            }
-            count++;
-            return result;*/
-            return native_library_loaded ? hash9_native(input, 0, input.length) : hash9(input, 0, input.length);
+
+            //return SCrypt.scrypt(input, input, 1024, 1, 1, 32);
+            //return hash9(input);
+            //byte [] java = hash9(input);
+            //long javaTime = System.currentTimeMillis();
+            //byte [] nativeResult = hash9_native(input);
+            //long nativeTime = System.currentTimeMillis();
+            //log.info("Hashing times: native {} ms vs java {} ms\n{}\n{}", nativeTime - javaTime, javaTime - start, new Sha256Hash(nativeResult), new Sha256Hash(java));
+            //log.info("Hashing time:  native {} ms", nativeTime - start);
+            //return nativeResult;
+            return native_library_loaded ? hash9_native(input) : hash9(input);
         } catch (Exception e) {
             return null;
         }
+        finally {
+            //long time = System.currentTimeMillis()-start;
+            //log.info("Quark Hash time: {} ms per block", time);
+        }
     }
 
-    static native byte [] hash9_native(byte [] input, int offset, int length);
-    static native byte [] hash9_native_old(byte [] input);
+    static native byte [] hash9_native(byte [] input);
 
-    static byte [] hash9(byte header[])
+
+    static byte [] hash9(byte header[]/*, const T1 pbegin, const T1 pend*/)
+
     {
-        return hash9(header, 0, header.length);
+
+        Sha512Hash[] hash = new Sha512Hash[9];
+
+        //sph_blake512_init(&ctx_blake);
+        BLAKE512 blake512 = new BLAKE512();
+
+
+        // ZBLAKE;
+        hash[0] = new Sha512Hash(blake512.digest(header));
+        BMW512 bmw = new BMW512();
+        // ZBMW;
+        hash[1] = new Sha512Hash(bmw.digest(hash[0].getBytes()));
+
+        if((hash[1].getBytes()[0] & 8) != 0)
+        {
+            Groestl512 groestl = new Groestl512();
+            // ZGROESTL;
+            hash[2] = new Sha512Hash(groestl.digest(hash[1].getBytes()));
+        }
+        else
+        {
+            //sph_skein512_init(&ctx_skein);
+            Skein512 skein = new Skein512();
+            // ZSKEIN;
+            //sph_skein512 (&ctx_skein, static_cast<const void*>(&hash[1]), 64);
+            hash[2] = new Sha512Hash(skein.digest(hash[1].getBytes()));
+            //sph_skein512_close(&ctx_skein, static_cast<void*>(&hash[2]));
+            //log.info("hash[2] skein: " + hash[2].toString());
+        }
+
+        //sph_groestl512_init(&ctx_groestl);
+        Groestl512 groestl = new Groestl512();
+        // ZGROESTL;
+        //sph_groestl512 (&ctx_groestl, static_cast<const void*>(&hash[2]), 64);
+        hash[3] = new Sha512Hash(groestl.digest(hash[2].getBytes()));
+
+         JH512 jh = new JH512();
+
+        hash[4] = new Sha512Hash(jh.digest(hash[3].getBytes()));
+
+        if((hash[4].getBytes()[0] & 8) != 0)
+        {
+            //  sph_blake512_init(&ctx_blake);
+            BLAKE512 blake5 = new BLAKE512();
+            // ZBLAKE;
+            hash[5] = new Sha512Hash(blake5.digest(hash[4].getBytes()));
+            // log.info("hash[5] blake: " + hash[5].toString());
+        }
+        else
+        {
+            //sph_bmw512_init(&ctx_bmw);
+            BMW512 bmw5 = new BMW512();
+            // ZBMW;
+            hash[5] = new Sha512Hash(bmw5.digest(hash[4].getBytes()));
+        }
+
+        //sph_keccak512_init(&ctx_keccak);
+        Keccak512 keccak = new Keccak512();
+        // ZKECCAK;
+        hash[6] = new Sha512Hash(keccak.digest(hash[5].getBytes()));
+
+        Skein512 skein = new Skein512();
+        // SKEIN;
+        hash[7] = new Sha512Hash(skein.digest(hash[6].getBytes()));
+
+        if((hash[7].getBytes()[0] & 8) != 0)
+        {
+
+            Keccak512 keccak7 = new Keccak512();
+            // ZKECCAK;
+            hash[8] = new Sha512Hash(keccak7.digest(hash[7].getBytes()));
+        }
+        else
+        {
+            //sph_jh512_init(&ctx_jh);
+            JH512 jh7 = new JH512();
+            // ZJH;
+            hash[8] = new Sha512Hash(jh7.digest(hash[7].getBytes()));
+
+        }
+
+
+        return hash[8].trim256().getBytes();
     }
-    /*
-      Java implimentation of the Quark Hashing Algorithm.
-      It consists of 6 of the SHA-3 candidates.  There are 9 rounds.
-      Every third round is a "random" hash based on the
-      0x8 bit of the first byte of the previous hash.
-
-      The hashes are all calculated to result with 512 bits (64 bytes).
-      The result returned is the first 32 bytes.
-
-      Order:
-        blake
-        bmw
-        (groestl or skein)
-        groestl
-        jh
-        (blake or bmw)
-        keccak
-        skein
-        (keccak or jh)
-     */
-    static byte [] hash9(byte [] header, int offset, int length)
-    {
-        byte [][] hash = new byte[9][];
-
-
-        blake512.update(header, offset, length);
-
-        hash[0] = blake512.digest();
-
-        hash[1] = bmw512.digest(hash[0]);
-
-        if((hash[1][0] & 8) != 0)
-        {
-            hash[2] = groestl512.digest(hash[1]);
-        }
-        else
-        {
-            hash[2] = skein512.digest(hash[1]);
-        }
-
-        hash[3] = groestl512.digest(hash[2]);
-
-        hash[4] = jh512.digest(hash[3]);
-
-        if((hash[4][0] & 8) != 0)
-        {
-            hash[5] = blake512.digest(hash[4]);
-        }
-        else
-        {
-            hash[5] = bmw512.digest(hash[4]);
-        }
-
-        hash[6] = keccak512.digest(hash[5]);
-
-        hash[7] = skein512.digest(hash[6]);
-
-        if((hash[7][0] & 8) != 0)
-        {
-            hash[8] = keccak512.digest(hash[7]);
-        }
-        else
-        {
-            hash[8] = jh512.digest(hash[7]);
-        }
-
-        return trim256(hash[8]);
-    }
-
-
-
 }

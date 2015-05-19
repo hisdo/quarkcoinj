@@ -1,6 +1,5 @@
 /**
  * Copyright 2013 Jim Burton.
- * Copyright 2014 Andreas Schildbach
  *
  * Licensed under the MIT license (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +31,6 @@ import org.spongycastle.crypto.params.ParametersWithIV;
 
 import java.io.Serializable;
 import java.security.SecureRandom;
-import java.util.Arrays;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -72,34 +70,16 @@ public class KeyCrypterScrypt implements KeyCrypter, Serializable {
 
     private static final transient SecureRandom secureRandom = new SecureRandom();
 
-    private static byte[] randomSalt() {
-        byte[] salt = new byte[SALT_LENGTH];
-        secureRandom.nextBytes(salt);
-        return salt;
-    }
-
     // Scrypt parameters.
     private final transient ScryptParameters scryptParameters;
 
     /**
-     * Encryption/Decryption using default parameters and a random salt.
+     * Encryption/ Decryption using default parameters and a random salt
      */
     public KeyCrypterScrypt() {
-        Protos.ScryptParameters.Builder scryptParametersBuilder = Protos.ScryptParameters.newBuilder().setSalt(
-                ByteString.copyFrom(randomSalt()));
-        this.scryptParameters = scryptParametersBuilder.build();
-    }
-
-    /**
-     * Encryption/Decryption using custom number of iterations parameters and a random salt. A useful value for mobile
-     * devices is 512 (~500 ms).
-     *
-     * @param iterations
-     *            number of scrypt iterations
-     */
-    public KeyCrypterScrypt(int iterations) {
-        Protos.ScryptParameters.Builder scryptParametersBuilder = Protos.ScryptParameters.newBuilder()
-                .setSalt(ByteString.copyFrom(randomSalt())).setN(iterations);
+        byte[] salt = new byte[SALT_LENGTH];
+        secureRandom.nextBytes(salt);
+        Protos.ScryptParameters.Builder scryptParametersBuilder = Protos.ScryptParameters.newBuilder().setSalt(ByteString.copyFrom(salt));
         this.scryptParameters = scryptParametersBuilder.build();
     }
 
@@ -174,10 +154,11 @@ public class KeyCrypterScrypt implements KeyCrypter, Serializable {
             BufferedBlockCipher cipher = new PaddedBufferedBlockCipher(new CBCBlockCipher(new AESFastEngine()));
             cipher.init(true, keyWithIv);
             byte[] encryptedBytes = new byte[cipher.getOutputSize(plainBytes.length)];
-            final int length1 = cipher.processBytes(plainBytes, 0, plainBytes.length, encryptedBytes, 0);
-            final int length2 = cipher.doFinal(encryptedBytes, length1);
+            int length = cipher.processBytes(plainBytes, 0, plainBytes.length, encryptedBytes, 0);
 
-            return new EncryptedPrivateKey(iv, Arrays.copyOf(encryptedBytes, length1 + length2));
+            cipher.doFinal(encryptedBytes, length);
+
+            return new EncryptedPrivateKey(iv, encryptedBytes);
         } catch (Exception e) {
             throw new KeyCrypterException("Could not encrypt bytes.", e);
         }
@@ -204,11 +185,16 @@ public class KeyCrypterScrypt implements KeyCrypter, Serializable {
             cipher.init(false, keyWithIv);
 
             byte[] cipherBytes = privateKeyToDecode.getEncryptedBytes();
-            byte[] decryptedBytes = new byte[cipher.getOutputSize(cipherBytes.length)];
-            final int length1 = cipher.processBytes(cipherBytes, 0, cipherBytes.length, decryptedBytes, 0);
-            final int length2 = cipher.doFinal(decryptedBytes, length1);
+            int minimumSize = cipher.getOutputSize(cipherBytes.length);
+            byte[] outputBuffer = new byte[minimumSize];
+            int length1 = cipher.processBytes(cipherBytes, 0, cipherBytes.length, outputBuffer, 0);
+            int length2 = cipher.doFinal(outputBuffer, length1);
+            int actualLength = length1 + length2;
 
-            return Arrays.copyOf(decryptedBytes, length1 + length2);
+            byte[] decryptedBytes = new byte[actualLength];
+            System.arraycopy(outputBuffer, 0, decryptedBytes, 0, actualLength);
+
+            return decryptedBytes;
         } catch (Exception e) {
             throw new KeyCrypterException("Could not decrypt bytes", e);
         }
